@@ -1,0 +1,9 @@
+@font-face {
+    font-family: 'Brandbe';
+    src: local('Brandbe Regular'), local('Brandbe-Regular'),
+        url('Brandbe-Regular.woff2') format('woff2'),
+        url('Brandbe-Regular.woff') format('woff'),
+        url('Brandbe-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+  }
