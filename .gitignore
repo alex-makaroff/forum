@@ -10,3 +10,7 @@ vite.config.ts.*
 .replit
 replit.md
 attached_assets/
+/.idea/
+/.claude/settings.local.json
+/.serena/
+/deploy/config.yml
