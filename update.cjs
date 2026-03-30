@@ -460,7 +460,7 @@ const reinstallDependencies = () => {
 const buildProject = () => {
   logIt('BUILD PROJECT', true);
   execWithNODE('npm run build', { silent: true });
-  logIt('Project build completed (vite + copy frontend + strapi)');
+  logIt('Project build completed (vite + esbuild)');
 };
 
 const restartService = (serviceNamePM) => {
