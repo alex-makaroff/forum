@@ -40,68 +40,101 @@ direnv allow
 # Установка зависимостей (через NVM-ноду)
 export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 nvm use 22.17.1
-npm install --omit=dev
+npm ci
+
+# Сборка проекта
+npm run build
 
 # Создание .env
 cp .env.production .env
-# При необходимости отредактировать: nano .env
+# Отредактировать реальные значения: nano .env
+
+# Создание deploy/config.yml
+cp deploy/config.example.yml deploy/config.yml
 
 # Установка systemd-сервиса
 chmod +x deploy/srv.cjs
 /root/.nvm/versions/node/v22.17.1/bin/node deploy/srv.cjs install
 ```
 
-## Обновление
+## Настройка NGINX
 
 ```bash
-cd /opt/node/forum
-git pull
-# При изменении зависимостей:
-/root/.nvm/versions/node/v22.17.1/bin/node -e "undefined" && npm install --omit=dev
-# Перезапуск сервиса:
-systemctl restart forum
+# Копирование конфига
+cp /opt/node/forum/deploy/NGINX/sites-enabled/forum.amak.site.conf /etc/nginx/sites-enabled/
+
+# Проверка конфигурации
+nginx -t
+
+# Перезагрузка NGINX
+systemctl reload nginx
 ```
+
+Конфиг (`deploy/NGINX/sites-enabled/forum.amak.site.conf`) проксирует запросы с `https://forum.amak.site` на `127.0.0.1:9013`. Включает SSL через wildcard-сертификат `*.amak.site`.
+
+### SSL-сертификат
+
+Wildcard-сертификат `*.amak.site` уже выпущен через certbot (Let's Encrypt). Файлы:
+- `/etc/letsencrypt/live/amak.site/fullchain.pem`
+- `/etc/letsencrypt/live/amak.site/privkey.pem`
+
+Если сертификат истёк — см. инструкцию `deploy/NGINX/Продление-ssl-сертификата-certbor-ssl-letsencrypt.md`.
+
+### Проверка доступности
+
+```bash
+# Локально на сервере
+curl -s -o /dev/null -w "%{http_code}" http://localhost:9013/
+
+# Через HTTPS
+curl -s -o /dev/null -w "%{http_code}" https://forum.amak.site/
+```
+
+## Автообновление (cron + update.cjs)
+
+`update.cjs` каждую минуту проверяет обновления в git, и при наличии:
+1. Делает `git pull`
+2. Переустанавливает зависимости (`npm ci`)
+3. Собирает проект (`npm run build`)
+4. Перезапускает сервис (`systemctl restart`)
+
+```bash
+# Добавление в cron
+(crontab -l 2>/dev/null; echo "*       *       *       *       *       /root/.nvm/versions/node/v22.17.1/bin/node /opt/node/forum/update.cjs >/dev/null 2>&1") | crontab -
+
+# Проверка
+crontab -l | grep forum
+```
+
+Логи автообновления: `/opt/node/deploy__forum__cumulative.log`
 
 ## Управление сервисом
 
 ```bash
 # Статус
-systemctl status forum
+systemctl status rest-express
 
 # Логи
-journalctl -o cat -xefu forum
+journalctl -o cat -xefu rest-express
 
 # Перезапуск
-systemctl restart forum
+systemctl restart rest-express
 
 # Остановка
-systemctl stop forum
+systemctl stop rest-express
 
 # Переустановка сервиса (удаление + установка заново)
 cd /opt/node/forum
-/root/.nvm/versions/node/v22.17.1/bin/node deploy/srv.cjs reinstall -p 9018
-```
-
-## Проверка работоспособности
-
-```bash
-# Health
-curl http://77.73.132.128:9018/health
-
-# Загрузка файла
-curl -F "file=@screenshot.png" http://77.73.132.128:9018/upload/test
-
-# Просмотр файлов
-curl http://77.73.132.128:9018/list
+/root/.nvm/versions/node/v22.17.1/bin/node deploy/srv.cjs reinstall -p 9013
 ```
 
 ## Systemd unit file
 
-Генерируется автоматически в `/etc/systemd/system/forum.service`:
+Генерируется автоматически в `/etc/systemd/system/rest-express.service`:
 
 ```ini
 [Unit]
-Description=forum
+Description=rest-express
 After=network.target
 StartLimitIntervalSec=0
 
@@ -109,7 +142,7 @@ StartLimitIntervalSec=0
 User=root
 WorkingDirectory=/opt/node/forum
 EnvironmentFile=/opt/node/forum/.env
-ExecStart=/root/.nvm/versions/node/v22.17.1/bin/node server.js
+ExecStart=/root/.nvm/versions/node/v22.17.1/bin/node dist/index.cjs
 Restart=always
 RestartSec=3
 
